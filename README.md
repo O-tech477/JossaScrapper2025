@@ -2,6 +2,14 @@
 
 JossaScrapper is a small JoSAA analytics app built with Streamlit and SQLite. It combines scraped JoSAA opening/closing rank data with a PDF-based IIT branch cache so you can explore admission cutoffs, filter by rank, and inspect seat allocation patterns by branch.
 
+## Quick Start
+
+If the JOSAA 2025 website is down, skip the scraper and launch the dashboard directly:
+
+```bash
+streamlit run app.py
+```
+
 ## What it does
 
 - `Got This Rank ?` helps you filter historical allotment data by category, gender, quota, round, rank, and institute type.
