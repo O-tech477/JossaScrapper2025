@@ -5,7 +5,7 @@ import os
 
 from pdf_reading import get_available_branches, get_iit_branch_seat_counts
 
-# --- PAGE SETUP ---
+#Basic streamlit setup 
 st.set_page_config(
     page_title="Jossa Hlper",
     page_icon="🎓",
@@ -13,6 +13,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+#DB names for website n report db. 
 DB_NAME = "database.db"
 BRANCH_CACHE_DB = "iit_branch_seats.db"
 
@@ -67,7 +68,7 @@ with st.sidebar:
         for pdf in pdf_files:
             with open(pdf, "rb") as f:
                 st.download_button(
-                    label=f"📄 Open/Download {pdf}",
+                    label=f"Open/Download {pdf}",
                     data=f.read(),
                     file_name=pdf,
                     mime="application/pdf"
