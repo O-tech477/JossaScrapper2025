@@ -7,7 +7,7 @@ from pdf_reading import get_available_branches, get_iit_branch_seat_counts
 
 #Basic streamlit setup 
 st.set_page_config(
-    page_title="Jossa Hlper",
+    page_title="Jossa Helper",
     page_icon="🎓",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -56,7 +56,7 @@ except Exception as e:
 
 
 with st.sidebar:
-    st.title("JoSAA Consultant")
+    st.title("JoSAA Wiki")
     st.markdown("---")
     st.subheader("📁 JIC 2025 Report")
     
