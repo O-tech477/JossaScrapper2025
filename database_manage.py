@@ -22,10 +22,20 @@ def get_insti_type(insti_name):
         return "IIT"
     elif "NATIONAL INSTITUTE OF TECHNOLOGY" in insti_name:
         return "NIT"
-    elif "FUNDED" in insti_name:
-        return "GFTI"
-    else:
+    # Detect IIIT explicitly
+    elif "INDIAN INSTITUTE OF INFORMATION TECHNOLOGY" in insti_name or re.search(r"\bIIIT\b", insti_name):
         return "IIIT"
+    # Treat previously-detected GFTI-like names as OTHER (no separate GFTI type)
+    elif (
+        "GFTI" in insti_name
+        or "FUNDED" in insti_name
+        or ("GOVERNMENT" in insti_name and "FUNDED" in insti_name)
+        or ("GOVT" in insti_name and "FUNDED" in insti_name)
+    ):
+        return "OTHER"
+    # If none of the above patterns match, classify conservatively as OTHER
+    else:
+        return "OTHER"
 
 
 def get_or_create_dim(cursor, table, index_col, value_col, data_val):

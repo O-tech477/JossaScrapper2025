@@ -174,4 +174,3 @@ def get_iit_branch_seat_counts(branch_name, db_path=DEFAULT_CACHE_DB):
 
 if __name__ == '__main__':
     initialize_branch_cache_db(force_rebuild=True)
-    print(get_iit_branch_seat_counts('Computer Science and Engineering').head())

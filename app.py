@@ -31,6 +31,10 @@ def load_dimension_options():
     genders = pd.read_sql("SELECT gender_value FROM Dim_Gender ORDER BY gender_value", conn)['gender_value'].tolist()
     quotas = pd.read_sql("SELECT quota_value FROM Dim_Quota ORDER BY quota_value", conn)['quota_value'].tolist()
     types = pd.read_sql("SELECT insti_type FROM Dim_InstiType ORDER BY insti_type", conn)['insti_type'].tolist()
+
+    if 'OTHER' not in types:
+        types.append('OTHER')
+        types = sorted(types)
     institutes = pd.read_sql("SELECT insti_value FROM Dim_InstiName ORDER BY insti_value", conn)['insti_value'].tolist()
     rounds = pd.read_sql("SELECT DISTINCT round FROM FactsTable ORDER BY round", conn)['round'].tolist()
     conn.close()
@@ -87,13 +91,16 @@ with tab1:
     
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        user_rank = st.number_input("Enter Your Rank (Category/CRL):", min_value=1, value=10180, step=1)
+        adv_rank = st.number_input("Enter Your Advance Rank (AIR):", min_value=1, value=10180, step=1)
     with col2:
-        selected_cat = st.selectbox("Your Seat Category:", categories)
+        mains_rank = st.number_input("Enter Your Mains Rank (JEE Mains):", min_value=1, value=9856, step=1)
     with col3:
-        selected_gender = st.selectbox("Gender Pool:", genders)
+        selected_cat = st.selectbox("Your Seat Category:", categories)
     with col4:
-        selected_quota = st.selectbox("Quota:", quotas)
+        selected_gender = st.selectbox("Gender Pool:", genders)
+
+    # Quota selector moved below to keep the row compact
+    selected_quota = st.selectbox("Quota:", quotas)
 
     # Round selector
     selected_round = st.selectbox("Round:", rounds)
@@ -125,12 +132,18 @@ with tab1:
                         WHERE c.cat_value = ? 
                             AND g.gender_value = ? 
                             AND q.quota_value = ?
-                            AND f.closing_rank >= ?
                             AND f.round = ?
         """
-        
+        # DB has AI instead of Al, a jugad fix 
+        if isinstance(selected_quota, str) and selected_quota.strip().upper() == 'AL':
+            db_quota = 'AI'
+        else:
+            db_quota = selected_quota
+
         conn = get_db_connection()
-        results_df = pd.read_sql(query, conn, params=(selected_cat, selected_gender, selected_quota, user_rank, selected_round))
+
+        #Adv ranks for IITs and Mains for NITs
+        results_df = pd.read_sql(query, conn, params=(selected_cat, selected_gender, db_quota, selected_round))
         conn.close()
 
         if selected_types:
@@ -141,27 +154,38 @@ with tab1:
         if results_df.empty:
             st.warning("No historical options found matching your exact parameters. Try widening your criteria.")
         else:
-            # 5% is the safety boundary
+
+            def applicable_rank(row):
+                return adv_rank if row['Institute Type'] == 'IIT' else mains_rank
+
+            # Within 5% of the cutoff -> borderline.
+            # More than 15% worse than the cutoff -> hide the row.
             def calculate_safety(row):
                 closing = row['Closing Rank']
                 if closing == 0 or pd.isna(closing):
-                    return "Unknown"
-                margin = (closing - user_rank) / closing
-                return "🟢 Safe" if margin > 0.05 else "🟡 Borderline"
+                    return None
+                rank_to_use = applicable_rank(row)
+                pct_diff = (rank_to_use - closing) / closing
+                if pct_diff > 0.15:
+                    return None
+                if abs(pct_diff) <= 0.05:
+                    return "🟡 Borderline"
+                return "🟢 Good Chance"
 
             results_df['Admission Chance'] = results_df.apply(calculate_safety, axis=1)
+            results_df = results_df[results_df['Admission Chance'].notna()]
             
             cols = ['Admission Chance'] + [col for col in results_df.columns if col != 'Admission Chance']
             results_df = results_df[cols]
 
             # High-level overview metrics
             total_options = len(results_df)
-            safe_count = len(results_df[results_df['Admission Chance'] == "🟢 Safe"])
+            safe_count = len(results_df[results_df['Admission Chance'] == "🟢 Good Chance"])
             border_count = total_options - safe_count
 
             m1, m2, m3 = st.columns(3)
             m1.metric("Total Match Choices Found", total_options)
-            m2.metric("Highly Probable Choices (Safe)", safe_count)
+            m2.metric("Highly Probable Choices (Good Chance)", safe_count)
             m3.metric("Competitive Choices (Borderline)", border_count)
 
             st.write("### Predicted Admission Choices")
@@ -187,7 +211,7 @@ with tab2:
         explorer_insti = st.selectbox("Select Target Institute:", all_institutes)
     with ec2:
         explorer_cat = st.selectbox("Select Target Category:", categories, key="explorer_cat")
-    # Explorer round selector
+
     explorer_round = st.selectbox("Select Round:", rounds, key="explorer_round")
 
     if explorer_insti:
