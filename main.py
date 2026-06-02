@@ -1,4 +1,4 @@
-from pdf_reading import initialize_branch_cache_db
+from seat_matrix_reader import initialize_branch_cache_db
 
 
 def main():

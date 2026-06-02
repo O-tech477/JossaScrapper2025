@@ -2,8 +2,10 @@ import streamlit as st
 import sqlite3
 import pandas as pd
 import os
+import altair as alt
 
-from pdf_reading import get_available_branches, get_iit_branch_seat_counts
+from crl_data import get_btw_ranks
+from seat_matrix_reader import get_available_branches, get_iit_branch_seat_counts
 
 #Basic streamlit setup 
 st.set_page_config(
@@ -83,7 +85,7 @@ with st.sidebar:
 
 st.title("JoSAA Analytics 2025")
 
-tab1, tab2, tab3 = st.tabs(["Got This Rank ?", " Dream College ?", "Seats for this ?"])
+tab1, tab2, tab3, tab4 = st.tabs(["Got This Rank ?", " Dream College ?", "Seats for this ?", "Between Two Ranks"])
 
 
 with tab1:
@@ -95,15 +97,15 @@ with tab1:
     with col2:
         mains_rank = st.number_input("Enter Your Mains Rank (JEE Mains):", min_value=1, value=9856, step=1)
     with col3:
-        selected_cat = st.selectbox("Your Seat Category:", categories)
+        selected_cat = str(st.selectbox("Your Seat Category:", categories))
     with col4:
-        selected_gender = st.selectbox("Gender Pool:", genders)
+        selected_gender = str(st.selectbox("Gender Pool:", genders))
 
     # Quota selector moved below to keep the row compact
-    selected_quota = st.selectbox("Quota:", quotas)
+    selected_quota = str(st.selectbox("Quota:", quotas))
 
     # Round selector
-    selected_round = st.selectbox("Round:", rounds)
+    selected_round = int(st.selectbox("Round:", rounds) or 0)
 
     # Secondary filter multi-select
     selected_types = st.multiselect("Preferred Institute Types:", insti_types, default=insti_types)
@@ -208,11 +210,11 @@ with tab2:
 
     ec1, ec2 = st.columns(2)
     with ec1:
-        explorer_insti = st.selectbox("Select Target Institute:", all_institutes)
+        explorer_insti = str(st.selectbox("Select Target Institute:", all_institutes))
     with ec2:
-        explorer_cat = st.selectbox("Select Target Category:", categories, key="explorer_cat")
+        explorer_cat = str(st.selectbox("Select Target Category:", categories, key="explorer_cat"))
 
-    explorer_round = st.selectbox("Select Round:", rounds, key="explorer_round")
+    explorer_round = int(st.selectbox("Select Round:", rounds, key="explorer_round") or 0)
 
     if explorer_insti:
         explorer_query = """
@@ -294,3 +296,79 @@ with tab3:
                     "Seats Taken": st.column_config.NumberColumn(format="%d")
                 }
             )
+
+
+with tab4:
+    st.subheader("Compare Colleges and Branches Across a Rank Band")
+    st.write("Enter two CRL ranks to see which colleges and branches appear in that window.")
+
+    rank_col1, rank_col2 = st.columns(2)
+    with rank_col1:
+        lower_rank = st.number_input("Lower Rank", min_value=1, value=1, step=1)
+    with rank_col2:
+        upper_rank = st.number_input("Upper Rank", min_value=1, value=5000, step=1)
+
+    if st.button("Analyze Rank Band", type="primary"):
+        if lower_rank > upper_rank:
+            st.error("Lower Rank must be less than or equal to Upper Rank.")
+        else:
+            try:
+                rank_rows = get_btw_ranks(int(lower_rank), int(upper_rank))
+            except Exception as exc:
+                st.error(f"Could not load rank-band data: {exc}")
+            else:
+                if not rank_rows:
+                    st.info("No colleges or branches were found in that rank range.")
+                else:
+                    rank_df = pd.DataFrame(rank_rows, columns=["Rank", "Institute Name", "Branch"])
+                    rank_df["Rank"] = pd.to_numeric(rank_df["Rank"], errors="coerce")
+                    rank_df = rank_df.dropna(subset=["Rank"])
+                    rank_df["Rank"] = rank_df["Rank"].astype(int)
+                    rank_df = rank_df.sort_values("Rank", ascending=True)
+
+                    total_rows = len(rank_df)
+                    unique_colleges = rank_df["Institute Name"].nunique()
+                    unique_branches = rank_df["Branch"].nunique()
+
+                    m1, m2, m3 = st.columns(3)
+                    m1.metric("Total Records", total_rows)
+                    m2.metric("Unique Colleges", unique_colleges)
+                    m3.metric("Unique Branches", unique_branches)
+
+                    st.dataframe(rank_df, use_container_width=True, hide_index=True)
+
+                    chart_left, chart_right = st.columns(2)
+
+                    college_counts = rank_df["Institute Name"].value_counts().reset_index(name="Count")
+                    college_counts = college_counts.rename(columns={"Institute Name": "College", "index": "College"})
+
+                    branch_counts = rank_df["Branch"].value_counts().reset_index(name="Count")
+                    branch_counts = branch_counts.rename(columns={"index": "Branch"})
+
+                    with chart_left:
+                        st.markdown("##### Colleges in the band")
+                        top_colleges = college_counts.head(30)
+                        college_chart = alt.Chart(top_colleges).mark_bar().encode(
+                            x=alt.X("Count:Q", title="Occurrences"),
+                            y=alt.Y("College:N", sort="-x", title="College"),
+                            tooltip=["College:N", "Count:Q"],
+                        ).properties(height=420)
+                        st.altair_chart(college_chart, use_container_width=True)
+
+                    with chart_right:
+                        st.markdown("##### Branch mix in the band")
+                        top_branches = branch_counts.copy()
+                        if len(top_branches) > 10:
+                            other_count = int(top_branches.iloc[10:]["Count"].sum())
+                            top_branches = top_branches.head(10)
+                            top_branches = pd.concat(
+                                [top_branches, pd.DataFrame([{ "Branch": "Other", "Count": other_count }])],
+                                ignore_index=True,
+                            )
+
+                        branch_chart = alt.Chart(top_branches).mark_arc(innerRadius=60).encode(
+                            theta=alt.Theta("Count:Q"),
+                            color=alt.Color("Branch:N", title="Branch"),
+                            tooltip=["Branch:N", "Count:Q"],
+                        ).properties(height=420)
+                        st.altair_chart(branch_chart, use_container_width=True)

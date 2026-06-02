@@ -2,20 +2,34 @@ from collections import Counter, defaultdict
 from pathlib import Path
 import re
 import sqlite3
-
 import pandas as pd
 import pypdf
 
 
 IIT_MAPPING = {
-    '101': 'IIT Bhubaneswar', '102': 'IIT Bombay', '103': 'IIT Mandi',
-    '104': 'IIT Delhi', '105': 'IIT Indore', '106': 'IIT Kharagpur',
-    '107': 'IIT Hyderabad', '108': 'IIT Jodhpur', '109': 'IIT Kanpur',
-    '110': 'IIT Madras', '111': 'IIT Gandhinagar', '112': 'IIT Patna',
-    '113': 'IIT Roorkee', '114': 'IIT (ISM) Dhanbad', '115': 'IIT Ropar',
-    '116': 'IIT (BHU) Varanasi', '117': 'IIT Guwahati', '118': 'IIT Bhilai',
-    '119': 'IIT Goa', '120': 'IIT Palakkad', '121': 'IIT Tirupati',
-    '122': 'IIT Jammu', '123': 'IIT Dharwad'
+    '101': 'IIT Bhubaneswar', 
+    '102': 'IIT Bombay', 
+    '103': 'IIT Mandi',
+    '104': 'IIT Delhi', 
+    '105': 'IIT Indore', 
+    '106': 'IIT Kharagpur',
+    '107': 'IIT Hyderabad', 
+    '108': 'IIT Jodhpur', 
+    '109': 'IIT Kanpur',
+    '110': 'IIT Madras', 
+    '111': 'IIT Gandhinagar', 
+    '112': 'IIT Patna',
+    '113': 'IIT Roorkee', 
+    '114': 'IIT (ISM) Dhanbad', 
+    '115': 'IIT Ropar',
+    '116': 'IIT (BHU) Varanasi', 
+    '117': 'IIT Guwahati', 
+    '118': 'IIT Bhilai',
+    '119': 'IIT Goa', 
+    '120': 'IIT Palakkad', 
+    '121': 'IIT Tirupati',
+    '122': 'IIT Jammu', 
+    '123': 'IIT Dharwad'
 }
 
 BRANCH_CODE_MAP = {
@@ -48,25 +62,75 @@ BRANCH_CODE_MAP = {
     'Biochemical Engineering': '412M',
     'Bioengineering': '412N',
     'Materials Science and Technology': '412O',
+    'Design': '412T',
+    'ComputationalEngineeringandMechanics': '412U',
+    'InstrumentationandBiomedicalEngineering': '412V',
+    'DigitalAgriculture': '412W',
+    'AbuDhabiCampus-ComputerScienceandEngineering': '412Z',
+    'AbuDhabiCampus-EnergyEngineering': '412[', 
+    'MiningEngineering': '4130',
+    'MiningMachineryEngineering':'4131',
+    'NavalArchitectureandOceanEngineering':'4132',
+    'OceanEngineeringandNavalArchitecture': '4133',
+    'PetroleumEngineering': '4134',
+    'ProductionandIndustrialEngineering': '4136',
+    'TextileTechnology': '4139',
+    'AbuDhabiCampus-ChemicalEngineering':'413A',
+    'ElectricalEngineering(IntegratedCircuitDesignandTechnology)':'413B',
+    'SpaceScienceandEngineering':'413I',
+    'CivilandInfrastructureEngineering':'4141',
+    'BioEngineering':'4143',
+    'ElectricalandElectronicsEngineering':'4144',
+    'MaterialsScienceandMetallurgicalEngineering':'4161',
+    'IndustrialandSystemsEngineering':'4170',
+    'PharmaceuticalEngineering&Technology':'4173',
+    'MechatronicsEngineering':'4178',
+    'DataScienceandArtificialIntelligence':'4181',
+    'ArtificialIntelligence':'4185',
+    'DataScienceandEngineering':'4187',
+    'ArtificialIntelligenceandDataScience':'4188',
+    'MineralandMetallurgicalEngineering':'4189',
+    'BiomedicalEngineering':'4191',
+    'EngineeringandComputationalMechanics':'4192',
+    'MaterialsEngineering':'4193',
+    'BiosciencesandBioengineering':'4194',
+    'EnergyEngineering':'4198',
+    'BiotechnologyandBioinformatics':'4199',
+    'Chemistry':'4201',
+    'Economics': '4202',
+    'MathematicsandScientificComputing': '4203',
+    'Physics': '4204',
+    'EarthSciences': '4205',
+    'BSinMathematics': '4206',
+    'StatisticsandDataScience':'4207',
+    'MathematicsandComputing': '4208',
+    'AppliedGeology': '4209',
+    'ExplorationGeophysics': '4210',
+    'PhysicswithSpecialization': '4211',
+    'ChemistrywithSpecialization': '4212',
+    'BSinChemicalSciences': "4213",
+    'BiologicalScience': '4214',
+    'AppliedGeophysics': '4215'
+
 }
 
 DEFAULT_PDF_PATH = 'JICReport2025.pdf'
 DEFAULT_CACHE_DB = 'iit_branch_seats.db'
-DEFAULT_PAGE_START = 299
-DEFAULT_PAGE_END = 499
 
+
+
+DEFAULT_PAGE_START_SEAT_MATRIX = 299
+DEFAULT_PAGE_END_SEAT_MATRIX = 499
 
 def get_available_branches():
     return sorted(BRANCH_CODE_MAP.keys())
-
 
 def _resolve_branch_code(branch_name):
     if branch_name not in BRANCH_CODE_MAP:
         raise ValueError(f"Unknown branch: {branch_name}")
     return BRANCH_CODE_MAP[branch_name]
 
-
-def _parse_all_branch_seat_counts(pdf_path=DEFAULT_PDF_PATH, page_start=DEFAULT_PAGE_START, page_end=DEFAULT_PAGE_END):
+def _parse_all_branch_seat_counts(pdf_path=DEFAULT_PDF_PATH, page_start=DEFAULT_PAGE_START_SEAT_MATRIX, page_end=DEFAULT_PAGE_END_SEAT_MATRIX):
     pdf_file = Path(pdf_path)
     reader = pypdf.PdfReader(str(pdf_file))
     branch_codes = sorted(set(BRANCH_CODE_MAP.values()), key=len, reverse=True)
@@ -99,7 +163,6 @@ def _parse_all_branch_seat_counts(pdf_path=DEFAULT_PDF_PATH, page_start=DEFAULT_
                 )
 
     return rows
-
 
 def initialize_branch_cache_db(db_path=DEFAULT_CACHE_DB, pdf_path=DEFAULT_PDF_PATH, force_rebuild=False):
     """Build or refresh the branch seat cache database from the PDF report."""

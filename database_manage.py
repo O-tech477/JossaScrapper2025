@@ -15,7 +15,6 @@ def initialize_db():
         conn.commit()
         conn.close()
 
-
 def get_insti_type(insti_name):
     insti_name = re.sub(r"\s+", " ", insti_name).strip().upper()
     if "INDIAN INSTITUTE OF TECHNOLOGY" in insti_name:
@@ -25,18 +24,8 @@ def get_insti_type(insti_name):
     # Detect IIIT explicitly
     elif "INDIAN INSTITUTE OF INFORMATION TECHNOLOGY" in insti_name or re.search(r"\bIIIT\b", insti_name):
         return "IIIT"
-    # Treat previously-detected GFTI-like names as OTHER (no separate GFTI type)
-    elif (
-        "GFTI" in insti_name
-        or "FUNDED" in insti_name
-        or ("GOVERNMENT" in insti_name and "FUNDED" in insti_name)
-        or ("GOVT" in insti_name and "FUNDED" in insti_name)
-    ):
-        return "OTHER"
-    # If none of the above patterns match, classify conservatively as OTHER
     else:
         return "OTHER"
-
 
 def get_or_create_dim(cursor, table, index_col, value_col, data_val):
     cursor.execute(f"SELECT {index_col} FROM {table} WHERE {value_col} = ?", (data_val,))
@@ -49,7 +38,6 @@ def get_or_create_dim(cursor, table, index_col, value_col, data_val):
         cursor.execute(f"INSERT INTO {table} ({value_col}) VALUES (?)", (data_val,))
         return cursor.lastrowid
     
-
 def store_data_entry(all_data):
 
     initialize_db()
@@ -84,4 +72,3 @@ def store_data_entry(all_data):
         cursor.execute("INSERT INTO FactsTable (year, round, insti_index, insti_type_index, quota_index, gender_index, cat_index, acad_prog_index, opening_rank, closing_rank) VALUES(?,?,?,?,?,?,?,?,?,?)", (year, round, insti_index, insti_type_index, quota_index, gender_index, cat_index, acad_program_index, opening_rank, closing_rank))
     connection.commit()
     connection.close()
-
