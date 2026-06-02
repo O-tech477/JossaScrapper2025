@@ -83,7 +83,7 @@ with st.sidebar:
 
 st.title("JoSAA Analytics 2025")
 
-tab1, tab2, tab3 = st.tabs(["Got This Rank ?", " Dream College ?", "Best IIT for this ?"])
+tab1, tab2, tab3 = st.tabs(["Got This Rank ?", " Dream College ?", "Seats for this ?"])
 
 
 with tab1:
@@ -261,7 +261,7 @@ with tab2:
             )
 
 with tab3:
-    st.subheader("Top IIT for a branch")
+    st.subheader("Seats For A Branch")
 
     selected_branch = st.selectbox("Select Branch:", branch_options, key="iit_branch_select")
     if not os.path.exists(BRANCH_CACHE_DB):
