@@ -86,7 +86,7 @@ with st.sidebar:
 
 st.title("JoSAA Analytics 2025")
 
-tab1, tab2, tab3, tab4, tab5 = st.tabs(["Got This Rank ?", " Dream College ?", "Seats for this ?", "Between Two Ranks", "State & Rank Data ?"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["Got This Rank ?", " Dream College ?", "Seats for this ?", "Between Two Ranks", "State Data ?"])
 
 
 with tab1:
@@ -405,114 +405,58 @@ with tab5:
         "and visualize where campuses draw their student populations from geographically."
     )
 
-    col1, col2 = st.columns([1, 1], gap="large")
+
+
+
+    st.header("🗺️ State-wise Campus Breakdown")
+    st.write("Select an institute to see a visual breakdown of where its students migrate from.")
     
+    try:
 
-    with col1:
-        st.header("🗺️ State-wise Campus Breakdown")
-        st.write("Select an institute to see a visual breakdown of where its students migrate from.")
+        insti_query = "SELECT DISTINCT insti_name FROM crl_vs_alloted WHERE insti_name IS NOT NULL ORDER BY insti_name"
+        institute_list = pd.read_sql(insti_query, conn)["insti_name"].tolist()
         
-        try:
-
-            insti_query = "SELECT DISTINCT insti_name FROM crl_vs_alloted WHERE insti_name IS NOT NULL ORDER BY insti_name"
-            institute_list = pd.read_sql(insti_query, conn)["insti_name"].tolist()
+        if institute_list:
+            selected_insti = st.selectbox(
+                "Choose an Institute", 
+                institute_list, 
+                key="demographic_insti_select"
+            )
             
-            if institute_list:
-                selected_insti = st.selectbox(
-                    "Choose an Institute", 
-                    institute_list, 
-                    key="demographic_insti_select"
-                )
-                
-                state_query = """
-                    SELECT rws.state AS State, COUNT(*) AS Students
-                    FROM crl_vs_alloted cva
-                    JOIN roll_with_state rws ON cva.rollno = rws.roll
-                    WHERE cva.insti_name = ?
-                    GROUP BY rws.state
-                    ORDER BY Students DESC
-                """
-                df_state = pd.read_sql(state_query, conn, params=[selected_insti])
-                
-
-                if not df_state.empty:
-                    fig_pie = px.pie(
-                        df_state, 
-                        values='Students', 
-                        names='State', 
-                        hole=0.4,  # Modern donut chart style
-                        color_discrete_sequence=px.colors.qualitative.Safe
-                    )
-                    fig_pie.update_traces(textposition='inside', textinfo='percent+label')
-                    fig_pie.update_layout(
-                        margin=dict(t=20, b=20, l=10, r=10),
-                        showlegend=False  
-                    )
-                    st.plotly_chart(fig_pie, use_container_width=True)
-                    
-
-                    with st.expander("Show exact student count per state"):
-                        st.dataframe(df_state, use_container_width=True, hide_index=True)
-                else:
-                    st.warning("No geographic matching records found for this campus.")
-            else:
-                st.error("No institutes found in the database.")
-                
-        except Exception as e:
-            st.error(f"Error fetching demographic data: {e}")
-
-
-    with col2:
-        st.header("🏆 Rank Distribution Filter")
-        st.write("Select a rank cutoff tier to see which specific institutes captured those top minds.")
-        
-        range_options = {
-            "Top 100": 100,
-            "Top 200": 200,
-            "Top 500": 500,
-            "Top 1000": 1000,
-            "Top 2000": 2000,
-            "Top 5000": 5000
-        }
-        
-        selected_range_label = st.selectbox(
-            "Select Rank Tier Cutoff", 
-            list(range_options.keys()), 
-            index=4, 
-            key="rank_tier_select"
-        )
-        cutoff_value = range_options[selected_range_label]
-        
-        try:
-
-            rank_query = """
-                SELECT insti_name AS Institute, COUNT(*) AS Seats_Occupied
-                FROM crl_vs_alloted
-                WHERE CAST(rank AS INTEGER) <= ?
-                GROUP BY insti_name
-                ORDER BY Seats_Occupied DESC
+            state_query = """
+                SELECT rws.state AS State, COUNT(*) AS Students
+                FROM crl_vs_alloted cva
+                JOIN roll_with_state rws ON cva.rollno = rws.roll
+                WHERE cva.insti_name = ?
+                GROUP BY rws.state
+                ORDER BY Students DESC
             """
-            df_ranks = pd.read_sql(rank_query, conn, params=[cutoff_value])
+            df_state = pd.read_sql(state_query, conn, params=[selected_insti])
             
 
-            if not df_ranks.empty:
-                fig_bar = px.bar(
-                    df_ranks,
-                    x='Seats_Occupied',
-                    y='Institute',
-                    orientation='h',
-                    color='Seats_Occupied',
-                    color_continuous_scale=px.colors.sequential.Blugrn,
-                    title=f"Institute Share within the {selected_range_label}"
+            if not df_state.empty:
+                fig_pie = px.pie(
+                    df_state, 
+                    values='Students', 
+                    names='State', 
+                    hole=0.4,  # Modern donut chart style
+                    color_discrete_sequence=px.colors.qualitative.Safe
                 )
-                fig_bar.update_layout(
-                    yaxis={'categoryorder':'total ascending'},
-                    margin=dict(t=40, b=20, l=10, r=10),
-                    coloraxis_showscale=False
+                fig_pie.update_traces(textposition='inside', textinfo='percent+label')
+                fig_pie.update_layout(
+                    margin=dict(t=20, b=20, l=10, r=10),
+                    showlegend=False  
                 )
-                st.plotly_chart(fig_bar, use_container_width=True)
-            else:
-                st.info(f"No database records found with rank values <= {cutoff_value}.")
+                st.plotly_chart(fig_pie, use_container_width=True)
                 
-        except Exception as e:
-            st.error(f"Error fetching rank metrics: {e}")
+
+                with st.expander("Show exact student count per state"):
+                    st.dataframe(df_state, use_container_width=True, hide_index=True)
+            else:
+                st.warning("No geographic matching records found for this campus.")
+        else:
+            st.error("No institutes found in the database.")
+            
+    except Exception as e:
+        st.error(f"Error fetching demographic data: {e}")
+

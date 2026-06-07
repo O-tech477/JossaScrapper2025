@@ -213,4 +213,3 @@ def get_btw_ranks(lower, upper):
 
     return result
 
-create_table()
