@@ -13,4 +13,5 @@ dependencies = [
     "selenium>=4.44.0",
     "streamlit>=1.58.0",
     "tabula-py>=2.10.0",
+    "plotly-express>=0.4.1",
 ]

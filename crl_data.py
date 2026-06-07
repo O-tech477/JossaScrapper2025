@@ -168,7 +168,7 @@ def create_table():
     conn = sqlite3.connect("database.db")
     cursor = conn.cursor()
 
-    #cursor.execute("CREATE TABLE crl_vs_alloted (rank INTEGER, insti_name VARCHAR, branch VARCHAR)")
+    #cursor.execute("CREATE TABLE crl_vs_alloted (rank INTEGER, rollno INTEGER, insti_name VARCHAR, branch VARCHAR)")
     
     with open("trial.csv", "r") as f:
         reader = csv.reader(f)
@@ -180,17 +180,16 @@ def create_table():
                 print("Row2:", row2)
 
                 cursor.executemany(
-                    "INSERT INTO crl_vs_alloted (rank, insti_name, branch) VALUES (?, ?, ?)",
+                    "INSERT INTO crl_vs_alloted (rank, rollno, insti_name, branch) VALUES (?, ?, ?, ?)",
                     [
-                        (int(row1[0]), IIT_MAPPING[row1[2]], BRANCH_CODE_MAP[row1[3]]),
-                        (int(row2[0]), IIT_MAPPING[row2[2]], BRANCH_CODE_MAP[row2[3]]),
+                        (int(row1[0]), int(row1[1]), IIT_MAPPING[row1[2]], BRANCH_CODE_MAP[row1[3]]),
+                        (int(row2[0]), int(row2[1]), IIT_MAPPING[row2[2]], BRANCH_CODE_MAP[row2[3]]),
                     ],
                 )
     conn.commit()
 
 def create_csv():
     pages = [i for i in range(307, 385)]
-    print(pages)
     allotted_crl_table = read_pdf("JICReport2025.pdf", pages = pages)
 
     combined_tables = pd.concat(allotted_crl_table, ignore_index=True)
@@ -214,3 +213,4 @@ def get_btw_ranks(lower, upper):
 
     return result
 
+create_table()

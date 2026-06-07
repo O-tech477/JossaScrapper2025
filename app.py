@@ -2,6 +2,7 @@ import streamlit as st
 import sqlite3
 import pandas as pd
 import os
+import plotly.express as px
 import altair as alt
 
 from crl_data import get_btw_ranks
@@ -85,7 +86,7 @@ with st.sidebar:
 
 st.title("JoSAA Analytics 2025")
 
-tab1, tab2, tab3, tab4 = st.tabs(["Got This Rank ?", " Dream College ?", "Seats for this ?", "Between Two Ranks"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["Got This Rank ?", " Dream College ?", "Seats for this ?", "Between Two Ranks", "State Data ?"])
 
 
 with tab1:
@@ -110,6 +111,16 @@ with tab1:
     # Secondary filter multi-select
     selected_types = st.multiselect("Preferred Institute Types:", insti_types, default=insti_types)
 
+    # --- Added: Dynamic Cutoff Tolerance Slider ---
+    cutoff_buffer = st.slider(
+        "Select Admission Cutoff Buffer (%)",
+        min_value=0,
+        max_value=50,
+        value=15,
+        step=1,
+        help="How much higher (worse) than the historical closing rank you are willing to consider. Options beyond this % are hidden."
+    )
+
     if st.button("Search", type="primary"):
         # Construct the Join Query targeting your exact Star Schema setup
         query = """
@@ -131,11 +142,12 @@ with tab1:
             JOIN Dim_Gender g ON f.gender_index = g.gender_index
             JOIN Dim_Category c ON f.cat_index = c.cat_index
             JOIN Dim_AcadProgram p ON f.acad_prog_index = p.acad_prog_index
-                        WHERE c.cat_value = ? 
-                            AND g.gender_value = ? 
-                            AND q.quota_value = ?
-                            AND f.round = ?
+            WHERE c.cat_value = ? 
+                AND g.gender_value = ? 
+                AND q.quota_value = ?
+                AND f.round = ?
         """
+        
         # DB has AI instead of Al, a jugad fix 
         if isinstance(selected_quota, str) and selected_quota.strip().upper() == 'AL':
             db_quota = 'AI'
@@ -144,7 +156,7 @@ with tab1:
 
         conn = get_db_connection()
 
-        #Adv ranks for IITs and Mains for NITs
+        # Adv ranks for IITs and Mains for NITs
         results_df = pd.read_sql(query, conn, params=(selected_cat, selected_gender, db_quota, selected_round))
         conn.close()
 
@@ -157,33 +169,47 @@ with tab1:
             st.warning("No historical options found matching your exact parameters. Try widening your criteria.")
         else:
 
+            # Fixed: Defensive text cleaning to handle database whitespace/casing issues
             def applicable_rank(row):
-                return adv_rank if row['Institute Type'] == 'IIT' else mains_rank
+                inst_type = str(row['Institute Type']).strip().upper()
+                return adv_rank if inst_type == 'IIT' else mains_rank
 
-            # Within 5% of the cutoff -> borderline.
-            # More than 15% worse than the cutoff -> hide the row.
+            # Fixed: Bulletproof safety classification logic
             def calculate_safety(row):
                 closing = row['Closing Rank']
                 if closing == 0 or pd.isna(closing):
                     return None
+                
                 rank_to_use = applicable_rank(row)
                 pct_diff = (rank_to_use - closing) / closing
-                if pct_diff > 0.15:
+                buffer_decimal = cutoff_buffer / 100.0
+                
+                # 1. Completely hide if user's rank exceeds the allowed slider buffer
+                if pct_diff > buffer_decimal:
                     return None
-                if abs(pct_diff) <= 0.05:
+                
+                # 2. Borderline if user's rank is worse than closing but within buffer, 
+                # OR if it's better but within a razor-thin 5% margin.
+                elif pct_diff >= -0.05:
                     return "🟡 Borderline"
-                return "🟢 Good Chance"
+                
+                # 3. Good chance if user's rank is comfortably lower (better) than the cutoff by > 5%
+                else:
+                    return "🟢 Good Chance"
 
             results_df['Admission Chance'] = results_df.apply(calculate_safety, axis=1)
+            
+            # Drop the hidden rows (None) so they don't clutter the UI
             results_df = results_df[results_df['Admission Chance'].notna()]
             
+            # Reorder columns to put status first
             cols = ['Admission Chance'] + [col for col in results_df.columns if col != 'Admission Chance']
             results_df = results_df[cols]
 
-            # High-level overview metrics
+            # High-level overview metrics calculation
             total_options = len(results_df)
             safe_count = len(results_df[results_df['Admission Chance'] == "🟢 Good Chance"])
-            border_count = total_options - safe_count
+            border_count = len(results_df[results_df['Admission Chance'] == "🟡 Borderline"])
 
             m1, m2, m3 = st.columns(3)
             m1.metric("Total Match Choices Found", total_options)
@@ -191,7 +217,6 @@ with tab1:
             m3.metric("Competitive Choices (Borderline)", border_count)
 
             st.write("### Predicted Admission Choices")
-
 
             st.dataframe(
                 results_df.sort_values(by="Closing Rank", ascending=True),
@@ -297,7 +322,6 @@ with tab3:
                 }
             )
 
-
 with tab4:
     st.subheader("Compare Colleges and Branches Across a Rank Band")
     st.write("Enter two CRL ranks to see which colleges and branches appear in that window.")
@@ -372,3 +396,123 @@ with tab4:
                             tooltip=["Branch:N", "Count:Q"],
                         ).properties(height=420)
                         st.altair_chart(branch_chart, use_container_width=True)
+
+with tab5:
+    conn = sqlite3.connect("database.db")
+    st.title("📊 Student Demographics & Rank Distribution")
+    st.write(
+        "Explore how top rankers are distributed across various IITs "
+        "and visualize where campuses draw their student populations from geographically."
+    )
+
+    col1, col2 = st.columns([1, 1], gap="large")
+    
+
+    with col1:
+        st.header("🗺️ State-wise Campus Breakdown")
+        st.write("Select an institute to see a visual breakdown of where its students migrate from.")
+        
+        try:
+
+            insti_query = "SELECT DISTINCT insti_name FROM crl_vs_alloted WHERE insti_name IS NOT NULL ORDER BY insti_name"
+            institute_list = pd.read_sql(insti_query, conn)["insti_name"].tolist()
+            
+            if institute_list:
+                selected_insti = st.selectbox(
+                    "Choose an Institute", 
+                    institute_list, 
+                    key="demographic_insti_select"
+                )
+                
+                state_query = """
+                    SELECT rws.state AS State, COUNT(*) AS Students
+                    FROM crl_vs_alloted cva
+                    JOIN roll_with_state rws ON cva.rollno = rws.roll
+                    WHERE cva.insti_name = ?
+                    GROUP BY rws.state
+                    ORDER BY Students DESC
+                """
+                df_state = pd.read_sql(state_query, conn, params=[selected_insti])
+                
+
+                if not df_state.empty:
+                    fig_pie = px.pie(
+                        df_state, 
+                        values='Students', 
+                        names='State', 
+                        hole=0.4,  # Modern donut chart style
+                        color_discrete_sequence=px.colors.qualitative.Safe
+                    )
+                    fig_pie.update_traces(textposition='inside', textinfo='percent+label')
+                    fig_pie.update_layout(
+                        margin=dict(t=20, b=20, l=10, r=10),
+                        showlegend=False  
+                    )
+                    st.plotly_chart(fig_pie, use_container_width=True)
+                    
+
+                    with st.expander("Show exact student count per state"):
+                        st.dataframe(df_state, use_container_width=True, hide_index=True)
+                else:
+                    st.warning("No geographic matching records found for this campus.")
+            else:
+                st.error("No institutes found in the database.")
+                
+        except Exception as e:
+            st.error(f"Error fetching demographic data: {e}")
+
+
+    with col2:
+        st.header("🏆 Rank Distribution Filter")
+        st.write("Select a rank cutoff tier to see which specific institutes captured those top minds.")
+        
+        range_options = {
+            "Top 100": 100,
+            "Top 200": 200,
+            "Top 500": 500,
+            "Top 1000": 1000,
+            "Top 2000": 2000,
+            "Top 5000": 5000
+        }
+        
+        selected_range_label = st.selectbox(
+            "Select Rank Tier Cutoff", 
+            list(range_options.keys()), 
+            index=4, 
+            key="rank_tier_select"
+        )
+        cutoff_value = range_options[selected_range_label]
+        
+        try:
+
+            rank_query = """
+                SELECT insti_name AS Institute, COUNT(*) AS Seats_Occupied
+                FROM crl_vs_alloted
+                WHERE CAST(rank AS INTEGER) <= ?
+                GROUP BY insti_name
+                ORDER BY Seats_Occupied DESC
+            """
+            df_ranks = pd.read_sql(rank_query, conn, params=[cutoff_value])
+            
+
+            if not df_ranks.empty:
+                fig_bar = px.bar(
+                    df_ranks,
+                    x='Seats_Occupied',
+                    y='Institute',
+                    orientation='h',
+                    color='Seats_Occupied',
+                    color_continuous_scale=px.colors.sequential.Blugrn,
+                    title=f"Institute Share within the {selected_range_label}"
+                )
+                fig_bar.update_layout(
+                    yaxis={'categoryorder':'total ascending'},
+                    margin=dict(t=40, b=20, l=10, r=10),
+                    coloraxis_showscale=False
+                )
+                st.plotly_chart(fig_bar, use_container_width=True)
+            else:
+                st.info(f"No database records found with rank values <= {cutoff_value}.")
+                
+        except Exception as e:
+            st.error(f"Error fetching rank metrics: {e}")
