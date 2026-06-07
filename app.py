@@ -86,7 +86,7 @@ with st.sidebar:
 
 st.title("JoSAA Analytics 2025")
 
-tab1, tab2, tab3, tab4, tab5 = st.tabs(["Got This Rank ?", " Dream College ?", "Seats for this ?", "Between Two Ranks", "State Data ?"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["Got This Rank ?", " Dream College ?", "Seats for this ?", "Between Two Ranks", "State & Rank Data ?"])
 
 
 with tab1:
